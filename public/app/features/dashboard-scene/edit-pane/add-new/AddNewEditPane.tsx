@@ -83,7 +83,9 @@ export function AddNewEditPane({ onAddPanel, dashboard, selectedElement }: AddNe
         </DragDropContext>
       </AddNewSection>
       <AddNewSection title={t('dashboard-scene.dashboard-side-pane-new.dashboard-controls', 'Dashboard controls')}>
-        {config.featureToggles.dashboardUnifiedDrilldownControls && <AddFilters dashboardScene={dashboardScene} />}
+        {config.featureToggles.groupByVariable && config.featureToggles.dashboardUnifiedDrilldownControls && (
+          <AddFilters dashboardScene={dashboardScene} />
+        )}
         <AddVariable dashboardScene={dashboardScene} />
         <AddAnnotationQuery dashboardScene={dashboardScene} />
         <AddLink dashboardScene={dashboardScene} />
