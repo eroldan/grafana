@@ -267,7 +267,8 @@ func TestService(t *testing.T) {
 		}
 
 		for i := 0; i < 10; i++ {
-			mode := svc.getStorageMode(context.Background(), gr)
+			mode, err := svc.getStorageMode(context.Background(), gr)
+			require.NoError(t, err)
 			require.Equal(t, unifiedmigrations.StorageModeDualWrite, mode)
 		}
 		require.Equal(t, 1, calls, "should resolve from reader exactly once")
@@ -376,7 +377,7 @@ type countingStatusReader struct {
 	calls    *int
 }
 
-func (c *countingStatusReader) GetStorageMode(ctx context.Context, gr schema.GroupResource) unifiedmigrations.StorageMode {
+func (c *countingStatusReader) GetStorageMode(ctx context.Context, gr schema.GroupResource) (unifiedmigrations.StorageMode, error) {
 	*c.calls++
 	return c.delegate.GetStorageMode(ctx, gr)
 }
