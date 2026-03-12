@@ -17,6 +17,7 @@ type migrationStatusReader struct {
 	cfg                     *setting.Cfg
 	registry                *MigrationRegistry
 	migrationLogTableExists bool
+	migrationLogTableMu     sync.Mutex
 	completedMigrations     sync.Map
 }
 
@@ -73,11 +74,16 @@ func (r *migrationStatusReader) GetStorageMode(ctx context.Context, gr schema.Gr
 	// The migration log is the source of truth for "data has been synced".
 	def, ok := r.findDefinition(gr)
 	if ok {
+		exists, err := r.ensureMigrationLogTableAvailability(ctx)
+		if err != nil {
+			return contract.StorageModeLegacy, err
+		}
+
 		if _, found := r.completedMigrations.Load(def.MigrationID); found {
 			return contract.StorageModeUnified, nil
 		}
 
-		if r.migrationLogTableExists {
+		if exists {
 			exists, err := migrationExists(ctx, r.sqlStore, def.MigrationID)
 			if err != nil {
 				return contract.StorageModeLegacy, fmt.Errorf("failed to resolve storage mode for %s from migration log: %w", gr.String(), err)
@@ -107,6 +113,40 @@ func (r *migrationStatusReader) GetStorageMode(ctx context.Context, gr schema.Gr
 	}
 
 	return contract.StorageModeLegacy, nil
+}
+
+func (r *migrationStatusReader) ensureMigrationLogTableAvailability(ctx context.Context) (bool, error) {
+	if r.sqlStore == nil {
+		return false, nil
+	}
+	if r.migrationLogTableExists {
+		return true, nil
+	}
+
+	r.migrationLogTableMu.Lock()
+	defer r.migrationLogTableMu.Unlock()
+
+	if r.migrationLogTableExists {
+		return true, nil
+	}
+
+	exists, err := migrationLogTableExists(r.sqlStore)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return false, nil
+	}
+
+	ids, err := migrationLogIDs(ctx, r.sqlStore)
+	if err != nil {
+		return false, err
+	}
+	for id := range ids {
+		r.completedMigrations.Store(id, struct{}{})
+	}
+	r.migrationLogTableExists = true
+	return true, nil
 }
 
 func (r *migrationStatusReader) configFor(key string) (setting.UnifiedStorageConfig, bool) {
